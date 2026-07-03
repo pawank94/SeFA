@@ -9,14 +9,23 @@ Python module to generate Indian ITR schedule FA under section A3 automatically
 4. Click on `Download` button which will open the popup.
 5. Click on `Download Expanded` which will prompt you to download the `BenefitHistory.xlsx` file
 
-## Run the script
-The script requires Python 3.8 or higher. Please ensure that it is installed on your system. In newer versions of Python, you may encounter an [`externally-managed-environment`](https://peps.python.org/pep-0668/). In this case, you can create a [Python virtual environment](https://docs.python.org/3/library/venv.html#creating-virtual-environments) and then run the script after activating the virtual environment.
+## Setup
+The script requires Python 3.8 or higher. Please ensure that it is installed on your system. In newer versions of Python, you may encounter an [`externally-managed-environment`](https://peps.python.org/pep-0668/), so create and activate a [Python virtual environment](https://docs.python.org/3/library/venv.html#creating-virtual-environments) before installing the dependencies.
 
-Below example, the command runs the script with the downloaded `BenefitHistory.xlsx`
+```sh
+# From the repository root
+python3 -m venv .venv
+source .venv/bin/activate        # Windows: .venv\Scripts\activate
+pip3 install .
+```
+
+This installs all required dependencies (`pandas`, `openpyxl`, `yfinance`, `requests`).
+
+## Run the script
+With the virtual environment activated, run the script with the downloaded `BenefitHistory.xlsx`:
 ```sh
 ./run.py -i "<absolute_folder_of_benefit_history_file>/BenefitHistory.xlsx" -ay 2023
 ```
-You may also have to install the missing Python3 dependencies using command `pip3 install <dependency_name>`
 
 Detailed options are listed below
 ```txt
