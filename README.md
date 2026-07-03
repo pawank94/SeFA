@@ -39,6 +39,21 @@ options:
   -v, --verbose         Enable the debug logs
 ```
 
+## Historic data auto-refresh
+`run.py` refreshes both data sources automatically before generating the schedule, so you
+do not need to run the refresh scripts yourself:
+
+- **Share FMV** (`historic_data/shares/<ticker>/data.csv`) from Yahoo Finance via `yfinance`,
+  for every ticker in your `BenefitHistory.xlsx`.
+- **RBI/FBIL reference rates** (`historic_data/rates/rbi/rates.xls`) from the FBIL benchmark
+  via the public [Frankfurter API](https://frankfurter.dev), for every currency used by those
+  tickers. FBIL data is available from 2018-07-10 onwards; only the refreshed currency pairs
+  are replaced, other pairs already in the file are left untouched.
+
+If a dependency is missing or there is no network, the run logs a warning and falls back to
+the bundled data. Pass `--skip-refresh` to force the bundled data (useful when offline). You
+can still run `refresh_historic_data.py` or `refresh_rbi_rates.py` manually.
+
 ## Output
 Inside the `output` folder(if nothing else is specified), the `ticker` folder will be created under which `fa_entries.csv` will be generated. For example, if your `BenefitHistory.xlsx`
 contains entries related to `adbe` then the folder will be `output/adbe/fa_entries.csv`

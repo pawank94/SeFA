@@ -1,6 +1,12 @@
 [project]
 name = "SeFA"
 version = "0.0.1"
+dependencies = [
+    "pandas",
+    "openpyxl",
+    "yfinance",
+    "requests",
+]
 
 [tool.pylint]
 # Configuration for Pylint
