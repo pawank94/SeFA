@@ -82,11 +82,11 @@ can still run `refresh_historic_data.py` or `refresh_rbi_rates.py` manually.
 
 ## Output
 Inside the `output` folder(if nothing else is specified), the `ticker` folder will be created under which `fa_entries.csv` will be generated. For example, if your `BenefitHistory.xlsx`
-contains entries related to `adbe` then the folder will be `output/adbe/fa_entries.csv`
+contains entries related to `adbe` then the folder will be `output/adbe/fa_entries.csv`. When the `-g/--gains-losses` flag is supplied, a debug `sales.json` file is also written to the output folder.
 
 # Limitations
 - Only parsing data from `BenefitHistory.xlsx` is supported.
-- When sold shares are supplied via the `-g/--gains-losses` flag, the script automatically reconciles them: closing balance is zeroed for sold lots, and gross sale proceeds are reported in the A3 "Total gross proceeds from sale or redemption" column. However, dividends and the "Total gross amount paid or credited" column are still not populated.
+- When sold shares are supplied via the `-g/--gains-losses` flag, the script automatically reconciles them based on the assessment-year calendar window: only lots whose sale date falls within the selected period have their closing balance zeroed and gross sale proceeds (USD→INR) reported in the A3 "Total gross proceeds from sale or redemption" column, with peak value computed only over the period the lot was held. Lots sold after the window are unaffected (still counted as held); lots sold before the window are excluded. However, dividends and the "Total gross amount paid or credited" column are still not populated.
 - This script is only tested under Mac, with a single `adbe` ticker with `calendar` `--calendar-mode` mode
 - Currently script works based on `historic_data`. Share FMV values is  present in [data.csv][data csv file]([ref][data csv ref])(check the first and last data in the file) and [rates.xls][SBI rates]([ref][SBI rates ref]) for RBI rate conversion
 
