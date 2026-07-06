@@ -2,12 +2,82 @@ import os
 import typing as t
 from itertools import groupby
 import operator
+from dataclasses import dataclass
 
-from utils import date_utils, share_data_utils, file_utils
+from utils import date_utils, share_data_utils, file_utils, logger
 from utils.ticker_mapping import ticker_org_info, ticker_currency_info
 from utils.rates import rbi_rates_utils
 from models.purchase import Purchase, Price
+from models.sale import Sale
 from models.itr.faa3 import FAA3
+
+
+@dataclass
+class Reconciliation:
+    held_purchases: t.List[Purchase]
+    sold_during: t.List[Sale]
+
+
+def bucket_sale(sale: Sale, start_time_in_ms: int, end_time_in_ms: int) -> str:
+    sold_ms = sale.sale_date["time_in_millis"]
+    if sold_ms < start_time_in_ms:
+        return "before"
+    if sold_ms > end_time_in_ms:
+        return "after"
+    return "during"
+
+
+def _reduce_held_lot(remaining: t.List[Purchase], sale: Sale) -> None:
+    """Subtract the sold quantity from its matching acquisition lot in place.
+
+    Matches by acquisition date; falls back to (FMV, quantity) for ESPP where
+    the G&L 'Date Acquired' differs from the BenefitHistory purchase date.
+    Logs loudly and leaves the held pool untouched when no lot matches."""
+    acq_ms = sale.acquisition_date["time_in_millis"]
+    candidates = [p for p in remaining if p.date["time_in_millis"] == acq_ms]
+    if not candidates:
+        candidates = [
+            p
+            for p in remaining
+            if abs(p.purchase_fmv.price - sale.acquisition_fmv.price) < 0.01
+            and p.quantity >= sale.quantity - 1e-6
+        ]
+    if not candidates:
+        logger.log(
+            f"WARNING: sold {sale.quantity} {sale.ticker} share(s) acquired "
+            f"{sale.acquisition_date['disp_time']} have no matching acquisition "
+            "lot; held balance may be overstated. Verify manually."
+        )
+        return
+    lot = candidates[0]
+    if sale.quantity > lot.quantity + 1e-6:
+        logger.log(
+            f"WARNING: sold quantity {sale.quantity} exceeds held {lot.quantity} "
+            f"for {sale.ticker} lot acquired {sale.acquisition_date['disp_time']}; "
+            "clamping to 0."
+        )
+    lot.quantity = max(0.0, lot.quantity - sale.quantity)
+
+
+def reconcile_sales(
+    purchases: t.List[Purchase],
+    sales: t.List[Sale],
+    start_time_in_ms: int,
+    end_time_in_ms: int,
+) -> Reconciliation:
+    remaining = [
+        Purchase(p.date, p.purchase_fmv, p.quantity, p.ticker) for p in purchases
+    ]
+    sold_during: t.List[Sale] = []
+    for sale in sales:
+        bucket = bucket_sale(sale, start_time_in_ms, end_time_in_ms)
+        if bucket == "after":
+            continue  # still held through the window end
+        if bucket == "during":
+            sold_during.append(sale)
+        _reduce_held_lot(remaining, sale)  # before + during reduce the held pool
+    held = [p for p in remaining if p.quantity > 1e-6]
+    return Reconciliation(held_purchases=held, sold_during=sold_during)
 
 
 def faa3_to_csv_row(entry: FAA3) -> tuple:
