@@ -8,6 +8,7 @@ from datetime import date, timedelta
 from parser.demat.etrade import etrade_benefit_history_parser
 from utils import logger, date_utils
 from parser.demat.etrade import etrade_holdings_bystatus_parser
+from parser.demat.etrade import etrade_gains_losses_parser
 from parser.itr import faa3_parser
 from utils.ticker_mapping import ticker_currency_info, ticker_org_info
 from refresh_historic_data import refresh, DEFAULT_START
@@ -86,12 +87,23 @@ def main():
         help="Skip refreshing historic share prices from Yahoo Finance and use the "
         "bundled historic_data CSVs instead (useful when offline)",
     )
+    parser.add_argument(
+        "-g",
+        "--gains-losses",
+        action="store",
+        dest="gains_losses_file",
+        default=None,
+        help="Optional absolute path to an E*Trade Gains & Losses export "
+        "(G&L_Expanded.xlsx). When provided, sold shares are reconciled into "
+        "the A3 output (closing balance and sale proceeds).",
+    )
 
     args = parser.parse_args()
 
     logger.DEBUG = args.debug
     etrade_benefit_history_parser.DEBUG = args.debug
     etrade_holdings_bystatus_parser.DEBUG = args.debug
+    etrade_gains_losses_parser.DEBUG = args.debug
 
     # Refresh before parsing: RSU rows resolve their FMV from the share price CSV
     # during parsing, so the historic data must be up to date beforehand.
@@ -112,8 +124,14 @@ def main():
             ),
         )
 
+    sales = []
+    if args.gains_losses_file:
+        sales = etrade_gains_losses_parser.parse(
+            args.gains_losses_file, args.output_folder
+        )
+
     faa3_parser.parse(
-        args.calendar_mode, purchases, args.assessment_year, args.output_folder
+        args.calendar_mode, purchases, args.assessment_year, args.output_folder, sales
     )
 
 
