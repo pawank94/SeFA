@@ -91,7 +91,7 @@ contains entries related to `adbe` then the folder will be `output/adbe/fa_entri
 - Currently script works based on `historic_data`. Share FMV values is  present in [data.csv][data csv file]([ref][data csv ref])(check the first and last data in the file) and [rates.xls][SBI rates]([ref][SBI rates ref]) for RBI rate conversion
 
 # Author
-[Atul Gupta](https://github.com/atulgpt)
+[Pawan Kumar](https://github.com/pawank94) (Credits to [Atul Gupta](https://github.com/atulgpt) for initial project)
 
 # Disclaimer
 In case of any issues, please create a bug report. Also, do not entirely depend on the script for ITR filing. Do your own due diligence before filing your ITR.
