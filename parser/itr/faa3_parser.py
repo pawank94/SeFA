@@ -10,6 +10,24 @@ from models.purchase import Purchase, Price
 from models.itr.faa3 import FAA3
 
 
+def faa3_to_csv_row(entry: FAA3) -> tuple:
+    return (
+        entry.org.country_name,
+        entry.org.country_code,
+        entry.org.name,
+        entry.org.address,
+        entry.org.zip_code,
+        entry.org.nature,
+        # ref https://www.reddit.com/r/IndiaTax/comments/1mhbi0w/a3_template_commonerrorscsv_row_skip_any_idea/
+        date_utils.format_time(entry.purchase.date["time_in_millis"], "%Y-%m-%d"),
+        round(entry.purchase_price),
+        round(entry.peak_price),
+        round(entry.closing_price),
+        0,  # gross amount paid/credited (dividends) - out of scope
+        round(entry.sale_proceeds),
+    )
+
+
 def parse_org_purchases(
     ticker: str,
     calendar_mode: str,
@@ -141,24 +159,7 @@ def parse_org_purchases(
             "Total gross amount paid/credited with respect to the holding during the period",
             "Total gross proceeds from sale or redemption of investment during the period",
         ],
-        map(
-            lambda entry: (
-                entry.org.country_name,
-                entry.org.country_code,
-                entry.org.name,
-                entry.org.address,
-                entry.org.zip_code,
-                entry.org.nature,
-                # ref https://www.reddit.com/r/IndiaTax/comments/1mhbi0w/a3_template_commonerrorscsv_row_skip_any_idea/
-                date_utils.format_time(entry.purchase.date["time_in_millis"], "%Y-%m-%d"),
-                round(entry.purchase_price),
-                round(entry.peak_price),
-                round(entry.closing_price),
-                0, # todo sale is not supported as of now,
-                0,
-            ),
-            fa_entries,
-        ),
+        map(faa3_to_csv_row, fa_entries),
         True,
         print_path_to_console=True,
     )
