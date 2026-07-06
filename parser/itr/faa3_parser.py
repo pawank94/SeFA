@@ -104,10 +104,17 @@ def parse_org_purchases(
     purchases: t.List[Purchase],
     assessment_year: int,
     output_folder_abs_path: str,
+    sales: t.Optional[t.List[Sale]] = None,
 ):
     start_time_in_ms, end_time_in_ms = date_utils.calendar_range(
         calendar_mode, assessment_year
     )
+    if sales:
+        recon = reconcile_sales(purchases, sales, start_time_in_ms, end_time_in_ms)
+        purchases = recon.held_purchases
+        sold_during = recon.sold_during
+    else:
+        sold_during = []
     org = ticker_org_info[ticker]
     currency_code = ticker_currency_info[ticker]
     before_purchases = list(
@@ -200,6 +207,35 @@ def parse_org_purchases(
             )
         )
 
+    for sale in sold_during:
+        acq_ms = sale.acquisition_date["time_in_millis"]
+        peak_start_ms = max(acq_ms, start_time_in_ms)
+        fa_entries.append(
+            FAA3(
+                org,
+                purchase=Purchase(
+                    sale.acquisition_date,
+                    sale.acquisition_fmv,
+                    sale.quantity,
+                    ticker,
+                ),
+                purchase_price=sale.quantity
+                * sale.acquisition_fmv.price
+                * rbi_rates_utils.get_rate_for_prev_mon_for_time_in_ms(
+                    currency_code, acq_ms
+                ),
+                peak_price=sale.quantity
+                * share_data_utils.get_peak_price_in_inr(
+                    ticker, peak_start_ms, sale.sale_date["time_in_millis"]
+                ),
+                closing_price=0,
+                sale_proceeds=sale.proceeds.price
+                * rbi_rates_utils.get_rate_for_prev_mon_for_time_in_ms(
+                    currency_code, sale.sale_date["time_in_millis"]
+                ),
+            )
+        )
+
     file_utils.write_to_file(
         os.path.join(output_folder_abs_path, ticker),
         "raw_fa_entries.json",
@@ -241,7 +277,15 @@ def parse(
     purchases: t.List[Purchase],
     assessment_year: int,
     output_folder_abs_path: str,
+    sales: t.Optional[t.List[Sale]] = None,
 ):
+    # Group sales by ticker. A ticker present only in sales (never in
+    # BenefitHistory purchases) is not emitted here — acceptable because
+    # BenefitHistory lists all acquisitions, including later-sold lots.
+    sales_by_ticker: t.Dict[str, t.List[Sale]] = {}
+    for sale in sales or []:
+        sales_by_ticker.setdefault(sale.ticker, []).append(sale)
+
     ticker_attr = operator.attrgetter("ticker")
     grouped_list = groupby(sorted(purchases, key=ticker_attr), ticker_attr)
 
@@ -252,4 +296,5 @@ def parse(
             list(each_org_purchases),
             assessment_year,
             output_folder_abs_path,
+            sales_by_ticker.get(ticker, []),
         )
