@@ -39,7 +39,7 @@ def test_parse_sell_row_skips_non_sell():
     ) is None
 
 
-def test_parse_skips_summary_and_returns_sales(tmp_path):
+def test_parse_skips_summary_and_returns_sales(tmp_path, monkeypatch):
     df = pd.DataFrame(
         {
             "Record Type": ["Summary", "Sell", "Sell"],
@@ -58,8 +58,7 @@ def test_parse_skips_summary_and_returns_sales(tmp_path):
     xl.__enter__.return_value = xl
     xl.__exit__.return_value = False
 
-    import parser.demat.etrade.etrade_gains_losses_parser as mod
-    mod.pd.ExcelFile = MagicMock(return_value=xl)
+    monkeypatch.setattr(etrade_gains_losses_parser.pd, "ExcelFile", MagicMock(return_value=xl))
 
     sales = etrade_gains_losses_parser.parse("ignored.xlsx", str(tmp_path))
     assert len(sales) == 2

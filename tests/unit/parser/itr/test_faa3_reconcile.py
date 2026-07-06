@@ -74,3 +74,4 @@ def test_unmatched_sale_warns_but_still_records_during(capsys):
     recon = faa3_parser.reconcile_sales(purchases, sales, START, END)
     assert len(recon.sold_during) == 1              # proceeds still reported
     assert recon.held_purchases[0].quantity == 4     # held not reduced
+    assert "no matching" in capsys.readouterr().out
