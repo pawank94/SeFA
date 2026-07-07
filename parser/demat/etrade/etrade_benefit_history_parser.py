@@ -26,7 +26,7 @@ def parse_espp_row(data: pd.Series) -> t.Optional[Purchase]:
                 float(data["Purchase Date FMV"][1:]),
                 ticker_currency_info[data["Symbol"].lower()],
             ),
-            quantity=float(data["Sellable Qty."]),
+            quantity=float(data["Net Shares"]),
             ticker=data["Symbol"].lower(),
         )
     return None
