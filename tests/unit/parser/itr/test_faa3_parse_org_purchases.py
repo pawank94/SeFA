@@ -21,14 +21,14 @@ def _purchase(date_str, qty):
     return Purchase(date_utils.parse_mm_dd(date_str), Price(500.0, "USD"), qty, "adbe")
 
 
-def _sale(acq_str, sold_str, qty, proceeds):
+def _sale(acq_str, sold_str, qty, proceeds, fmv=500.0):
     return Sale(
         ticker="adbe",
         plan_type="RS",
         acquisition_date=date_utils.parse_mm_dd(acq_str),
         sale_date=date_utils.parse_mm_dd(sold_str),
         quantity=qty,
-        acquisition_fmv=Price(500.0, "USD"),
+        acquisition_fmv=Price(fmv, "USD"),
         proceeds=Price(proceeds, "USD"),
     )
 
@@ -55,3 +55,25 @@ def test_no_sales_behaves_like_before(tmp_path):
     )
     assert all(e.sale_proceeds == 0 for e in entries)
     assert any(e.closing_price > 0 for e in entries)  # held, closing populated
+
+
+def test_held_and_sold_rows_report_the_same_initial_value(tmp_path):
+    # Regression for a lot partially sold in-window: the held remainder and
+    # the sold portion of the SAME vest must report identical initial values
+    # in the A3 CSV. Before the fix, the held row used the purchase's
+    # originally-parsed FMV (500.0, stubbed via get_fmv above) while the sold
+    # row used the G&L-reported FMV (480.0) -- two different values for one
+    # vest event.
+    purchases = [_purchase("08/15/2025", 9)]
+    sales = [_sale("08/15/2025", "09/17/2025", 4.5, proceeds=1629.0, fmv=480.0)]
+    entries = faa3_parser.parse_org_purchases(
+        "adbe", "calendar", purchases, 2026, str(tmp_path), sales
+    )
+    held = next(e for e in entries if e.closing_price > 0)
+    sold = next(e for e in entries if e.sale_proceeds > 0)
+    assert held.purchase.purchase_fmv.price == 480.0
+    assert sold.purchase.purchase_fmv.price == 480.0
+    # held (9 - 4.5 = 4.5 shares) and sold (4.5 shares) are equal quantities
+    # of the same vest, so their initial values must match exactly
+    assert held.purchase_price == pytest.approx(sold.purchase_price)
+    assert held.purchase_price == pytest.approx(4.5 * 480.0 * 80.0)

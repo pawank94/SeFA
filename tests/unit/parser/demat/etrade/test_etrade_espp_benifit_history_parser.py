@@ -29,12 +29,34 @@ def test_espp_parsing_row_with_valid_purchase():
                 "Symbol": "ADBE",
                 "Purchase Date": "30-JUN-2020",
                 "Sellable Qty.": "2",
+                "Net Shares": "2",
                 "Purchase Date FMV": "$435.31",
             }
         )
     )
     assert espp_purchase is not None
     assert espp_purchase.quantity == 2.0
+
+
+def test_espp_parsing_row_uses_net_shares_not_sellable_qty():
+    # Sellable Qty. reflects shares still available to sell as of the export
+    # date and drops to 0 once a lot is sold, even though it was legitimately
+    # acquired (and possibly still held at calendar year-end). Net Shares is
+    # the actual quantity credited at purchase and must be used instead.
+    espp_purchase = etrade_benefit_history_parser.parse_espp_row(
+        pd.Series(
+            {
+                "Record Type": "Purchase",
+                "Symbol": "ADBE",
+                "Purchase Date": "31-DEC-2025",
+                "Sellable Qty.": "0",
+                "Net Shares": "10.219",
+                "Purchase Date FMV": "$349.99",
+            }
+        )
+    )
+    assert espp_purchase is not None
+    assert espp_purchase.quantity == 10.219
 
 
 def test_espp_parsing_with_only_released_shares(
