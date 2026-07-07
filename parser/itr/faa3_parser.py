@@ -27,12 +27,11 @@ def bucket_sale(sale: Sale, start_time_in_ms: int, end_time_in_ms: int) -> str:
     return "during"
 
 
-def _reduce_held_lot(remaining: t.List[Purchase], sale: Sale) -> None:
-    """Subtract the sold quantity from its matching acquisition lot in place.
+def _find_matching_lot(remaining: t.List[Purchase], sale: Sale) -> t.Optional[Purchase]:
+    """Find the acquisition lot a sale is drawn from.
 
     Matches by acquisition date; falls back to (FMV, quantity) for ESPP where
-    the G&L 'Date Acquired' differs from the BenefitHistory purchase date.
-    Logs loudly and leaves the held pool untouched when no lot matches."""
+    the G&L 'Date Acquired' differs from the BenefitHistory purchase date."""
     acq_ms = sale.acquisition_date["time_in_millis"]
     candidates = [p for p in remaining if p.date["time_in_millis"] == acq_ms]
     if not candidates:
@@ -42,14 +41,36 @@ def _reduce_held_lot(remaining: t.List[Purchase], sale: Sale) -> None:
             if abs(p.purchase_fmv.price - sale.acquisition_fmv.price) < 0.01
             and p.quantity >= sale.quantity - 1e-6
         ]
-    if not candidates:
+    return candidates[0] if candidates else None
+
+
+def _apply_g_and_l_fmv(remaining: t.List[Purchase], sale: Sale) -> None:
+    """Overwrite the matched lot's FMV with the sale's G&L-reported
+    'Adjusted Cost Basis Per Share'. That figure is the broker/employer's
+    actual recorded FMV for the vest, and is what the rest of that same lot
+    (if only partially sold) was valued at too — the independent historic
+    price feed used elsewhere is only a fallback for lots with no sale to
+    confirm against, and can be off by a few dollars (wrong FMV convention,
+    or the vest date landing on a weekend/holiday with no market close).
+    Applies regardless of when the sale happened, since it corrects a data
+    quality issue in the acquisition value, not the held quantity."""
+    lot = _find_matching_lot(remaining, sale)
+    if lot is None:
         logger.log(
             f"WARNING: sold {sale.quantity} {sale.ticker} share(s) acquired "
             f"{sale.acquisition_date['disp_time']} have no matching acquisition "
-            "lot; held balance may be overstated. Verify manually."
+            "lot; its FMV could not be cross-checked against the G&L export. "
+            "Verify manually."
         )
         return
-    lot = candidates[0]
+    lot.purchase_fmv = sale.acquisition_fmv
+
+
+def _reduce_held_lot(remaining: t.List[Purchase], sale: Sale) -> None:
+    """Subtract the sold quantity from its matching acquisition lot in place."""
+    lot = _find_matching_lot(remaining, sale)
+    if lot is None:
+        return  # _apply_g_and_l_fmv already warned about the missing match
     if sale.quantity > lot.quantity + 1e-6:
         logger.log(
             f"WARNING: sold quantity {sale.quantity} exceeds held {lot.quantity} "
@@ -71,8 +92,9 @@ def reconcile_sales(
     sold_during: t.List[Sale] = []
     for sale in sales:
         bucket = bucket_sale(sale, start_time_in_ms, end_time_in_ms)
+        _apply_g_and_l_fmv(remaining, sale)  # always correct the acquisition FMV
         if bucket == "after":
-            continue  # still held through the window end
+            continue  # still held through the window end; don't reduce quantity
         if bucket == "during":
             sold_during.append(sale)
         _reduce_held_lot(remaining, sale)  # before + during reduce the held pool
